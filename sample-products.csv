@@ -1,0 +1,6 @@
+Item Code,Item Name,Description,Category,Unit Price,GST Status,Stock Quantity,Supplier,Notes
+BRK001,Standard Brick,Red clay brick 230x110x76,Building Materials,1.25,inclusive,5000,BrickCo,
+LAB-HR,Labor Hour,General labour per hour,Labour,85.00,inclusive,,Internal,Standard site rate
+DEL-001,Delivery Fee,Local delivery charge,Delivery,45.00,inclusive,,Transport,
+EARTH-01,Earthworks,Excavation and fill per m3,Earthworks,120.00,exclusive,0,EarthWorks Pty,
+PIPE-50,50mm PVC Pipe,50mm PVC pipe per metre,Plumbing,8.50,inclusive,200,PlumbSupply,

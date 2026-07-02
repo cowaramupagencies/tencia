@@ -1,0 +1,27 @@
+HOW TO START THE TEMPORARY INVOICING APP
+========================================
+
+Do NOT open index.html directly in the browser.
+
+EASIEST WAY:
+  Double-click:  start-app.bat
+
+That will start the app and open your browser automatically.
+Leave the black window open while you use the app.
+Press Ctrl+C in that window when finished.
+
+IF YOU USE POWERSHELL AND npm IS NOT RECOGNISED:
+  Copy and paste these two lines:
+
+    $env:Path = "C:\Program Files\nodejs;" + $env:Path
+    npm run dev
+
+  Then open:  http://localhost:5173
+
+OR close PowerShell completely, open a NEW PowerShell window, then:
+
+    cd C:\Users\Rebecca\Projects\temporary-invoicing
+    npm run dev
+
+NOTE: start-app.ps1 may be blocked by Windows security.
+      Use start-app.bat instead.
