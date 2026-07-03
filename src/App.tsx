@@ -11,8 +11,10 @@ import { ReconciliationPage } from './pages/ReconciliationPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 export default function App() {
+  const basename = import.meta.env.BASE_URL.replace(/\/$/, '');
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={basename || undefined}>
       <PendingInvoiceProvider>
         <Routes>
           <Route element={<Layout />}>
