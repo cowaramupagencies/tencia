@@ -30,17 +30,22 @@ export function DashboardPage() {
       <PageHeader
         title="Dashboard"
         subtitle="Overview of products and invoices while the main system is unavailable."
-        action={
-          <div className="flex gap-2">
-            <Link to="/invoice/new" className="btn-primary">
-              New Invoice
-            </Link>
-            <Link to="/search" className="btn-secondary">
-              Product Search
-            </Link>
-          </div>
-        }
       />
+
+      <div className="my-8 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
+        <Link
+          to="/invoice/new"
+          className="btn-primary w-full max-w-xs px-10 py-5 text-center text-lg font-semibold sm:w-auto sm:min-w-[240px]"
+        >
+          New Invoice
+        </Link>
+        <Link
+          to="/search"
+          className="btn-add-invoice w-full max-w-xs px-10 py-5 text-center text-lg font-semibold sm:w-auto sm:min-w-[240px]"
+        >
+          Product Search
+        </Link>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard label="Products imported" value={productCount} />

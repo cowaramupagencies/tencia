@@ -5,6 +5,7 @@ import { usePendingInvoice } from '../context/PendingInvoiceContext';
 import { useProducts } from '../hooks/useProducts';
 import { formatCurrency } from '../lib/calculations';
 import { createLineFromProduct } from '../lib/exports';
+import { getActiveInvoicePath } from '../lib/pendingInvoiceLines';
 import type { Product } from '../types';
 
 export function ProductSearchPage() {
@@ -51,6 +52,10 @@ export function ProductSearchPage() {
     closeQuantityModal();
   };
 
+  const goToInvoice = () => {
+    navigate(getActiveInvoicePath());
+  };
+
   if (products.length === 0) {
     return (
       <div>
@@ -73,7 +78,7 @@ export function ProductSearchPage() {
         title="Product Search"
         subtitle={`Search ${products.length} products by code, name, description, category, or supplier.`}
         action={
-          <Link to="/invoice/new" className="btn-primary">
+          <Link to={getActiveInvoicePath()} className="btn-primary">
             Go to New Invoice{pendingCount > 0 ? ` (${pendingCount} added)` : ''}
           </Link>
         }
@@ -82,7 +87,7 @@ export function ProductSearchPage() {
       {pendingCount > 0 && (
         <div className="mb-4 rounded-lg border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-800">
           {pendingCount} item{pendingCount === 1 ? '' : 's'} ready for the invoice.{' '}
-          <button type="button" className="link" onClick={() => navigate('/invoice/new')}>
+          <button type="button" className="link" onClick={goToInvoice}>
             Open invoice
           </button>
         </div>
@@ -133,7 +138,7 @@ export function ProductSearchPage() {
 
       <div className="mt-4 flex items-center justify-between">
         <p className="text-sm text-slate-500">{results.length} results</p>
-        <button type="button" className="btn-secondary" onClick={() => navigate('/invoice/new')}>
+        <button type="button" className="btn-secondary" onClick={goToInvoice}>
           Continue to invoice{pendingCount > 0 ? ` (${pendingCount})` : ''}
         </button>
       </div>
@@ -146,7 +151,10 @@ export function ProductSearchPage() {
               <th>Item Name</th>
               <th>Description</th>
               <th>Category</th>
-              <th>Unit Price</th>
+              <th>
+                Unit Price
+                <span className="mt-0.5 block text-xs font-normal text-slate-400">(+ GST)</span>
+              </th>
               <th>Stock</th>
               <th></th>
             </tr>
@@ -158,15 +166,18 @@ export function ProductSearchPage() {
                 <td>{p.itemName}</td>
                 <td className="max-w-xs truncate">{p.description}</td>
                 <td>{p.category}</td>
-                <td>{formatCurrency(p.unitPrice)}</td>
+                <td>
+                  {formatCurrency(p.unitPrice)}
+                  <span className="block text-xs text-slate-400">(+ GST)</span>
+                </td>
                 <td>{p.stockQuantity ?? '—'}</td>
                 <td>
                   <button
                     type="button"
-                    className="btn-primary btn-sm"
+                    className="btn-add-invoice btn-sm"
                     onClick={() => openQuantityModal(p)}
                   >
-                    {addedId === p.id ? 'Added ✓' : 'Add to Invoice'}
+                    {addedId === p.id ? 'Added ✓' : 'Add To Invoice'}
                   </button>
                 </td>
               </tr>
@@ -184,7 +195,10 @@ export function ProductSearchPage() {
             <div className="rounded-lg bg-slate-50 p-4 text-sm">
               <p className="font-semibold text-slate-900">{selectedProduct.itemName}</p>
               <p className="text-slate-600">Code: {selectedProduct.itemCode}</p>
-              <p className="text-slate-600">Unit price: {formatCurrency(selectedProduct.unitPrice)}</p>
+              <p className="text-slate-600">
+                Unit price: {formatCurrency(selectedProduct.unitPrice)}
+                <span className="block text-xs text-slate-400">(+ GST)</span>
+              </p>
             </div>
 
             <label className="block">
@@ -212,8 +226,8 @@ export function ProductSearchPage() {
               <button type="button" className="btn-secondary" onClick={closeQuantityModal}>
                 Cancel
               </button>
-              <button type="button" className="btn-primary" onClick={confirmAdd}>
-                Add to invoice
+              <button type="button" className="btn-add-invoice" onClick={confirmAdd}>
+                Add To Invoice
               </button>
             </div>
           </div>

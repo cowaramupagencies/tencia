@@ -1,64 +1,43 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import {
+  appendPendingLine as appendStoredLine,
+  clearPendingLinesStorage,
+  readPendingLines,
+} from '../lib/pendingInvoiceLines';
 import type { InvoiceLineItem } from '../types';
 
-const STORAGE_KEY = 'pending-invoice-lines';
-
 interface PendingInvoiceContextValue {
-  pendingLines: InvoiceLineItem[];
   pendingCount: number;
+  refreshPendingCount: () => void;
   addPendingLine: (line: InvoiceLineItem) => void;
   clearPendingLines: () => void;
 }
 
 const PendingInvoiceContext = createContext<PendingInvoiceContextValue | null>(null);
 
-function loadStoredLines(): InvoiceLineItem[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as InvoiceLineItem[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveStoredLines(lines: InvoiceLineItem[]) {
-  try {
-    if (lines.length === 0) {
-      sessionStorage.removeItem(STORAGE_KEY);
-    } else {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(lines));
-    }
-  } catch {
-    // ignore storage errors
-  }
-}
-
 export function PendingInvoiceProvider({ children }: { children: ReactNode }) {
-  const [pendingLines, setPendingLines] = useState<InvoiceLineItem[]>(() => loadStoredLines());
+  const [pendingCount, setPendingCount] = useState(() => readPendingLines().length);
 
-  useEffect(() => {
-    saveStoredLines(pendingLines);
-  }, [pendingLines]);
-
-  const addPendingLine = useCallback((line: InvoiceLineItem) => {
-    setPendingLines((prev) => [...prev, line]);
+  const refreshPendingCount = useCallback(() => {
+    setPendingCount(readPendingLines().length);
   }, []);
+
+  const addPendingLine = useCallback(
+    (line: InvoiceLineItem) => {
+      appendStoredLine(line);
+      refreshPendingCount();
+    },
+    [refreshPendingCount],
+  );
 
   const clearPendingLines = useCallback(() => {
-    setPendingLines([]);
-    sessionStorage.removeItem(STORAGE_KEY);
-  }, []);
+    clearPendingLinesStorage();
+    refreshPendingCount();
+  }, [refreshPendingCount]);
 
   const value = useMemo(
-    () => ({
-      pendingLines,
-      pendingCount: pendingLines.length,
-      addPendingLine,
-      clearPendingLines,
-    }),
-    [pendingLines, addPendingLine, clearPendingLines],
+    () => ({ pendingCount, refreshPendingCount, addPendingLine, clearPendingLines }),
+    [pendingCount, refreshPendingCount, addPendingLine, clearPendingLines],
   );
 
   return (

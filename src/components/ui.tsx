@@ -1,4 +1,28 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+
+interface CollapsibleSectionProps {
+  title: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}
+
+export function CollapsibleSection({ title, children, defaultOpen = false }: CollapsibleSectionProps) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="rounded-lg border border-slate-200">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-slate-800 hover:bg-slate-50"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>{title}</span>
+        <span className="text-slate-400">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && <div className="space-y-4 border-t border-slate-200 px-4 py-4">{children}</div>}
+    </div>
+  );
+}
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,7 +51,7 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
         <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
-        <p className="mt-3 text-sm leading-relaxed text-slate-600">{message}</p>
+        <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-slate-600">{message}</p>
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onCancel} className="btn-secondary">
             {cancelLabel}

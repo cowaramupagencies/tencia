@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ConfirmDialog, PageHeader, SavedIndicator } from '../components/ui';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { CollapsibleSection, ConfirmDialog, PageHeader, SavedIndicator } from '../components/ui';
 import { usePendingInvoice } from '../context/PendingInvoiceContext';
 import { db, ensureDefaultSettings, peekNextInvoiceNumber } from '../db/database';
 import { useAutoSave, useInvoices } from '../hooks/useInvoices';
 import { useSettings } from '../hooks/useSettings';
 import { calculateInvoiceTotals, formatCurrency, todayIsoDate } from '../lib/calculations';
 import { createManualLineItem, exportInvoiceFiles } from '../lib/exports';
+import {
+  clearPendingLinesStorage,
+  mergeLinesIntoInvoice,
+  readPendingLines,
+  setActiveInvoicePath,
+} from '../lib/pendingInvoiceLines';
 import type { Invoice, InvoiceLineItem } from '../types';
 
 function sortLines(lines: InvoiceLineItem[]): InvoiceLineItem[] {
@@ -18,9 +24,10 @@ export function InvoiceBuilderPage() {
   const [searchParams] = useSearchParams();
   const duplicateId = searchParams.get('duplicate');
   const navigate = useNavigate();
+  const location = useLocation();
   const { settings } = useSettings();
   const { getInvoice, saveInvoice } = useInvoices();
-  const { pendingLines, clearPendingLines } = usePendingInvoice();
+  const { clearPendingLines, refreshPendingCount, pendingCount } = usePendingInvoice();
 
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,10 +49,16 @@ export function InvoiceBuilderPage() {
     async (data: Invoice) => {
       if (!data || data.status !== 'Draft') return;
       const toSave = invoiceIdRef.current ? { ...data, id: invoiceIdRef.current } : data;
+      const wasNew = !invoiceIdRef.current && !id;
       const savedId = await saveInvoice(toSave);
       invoiceIdRef.current = savedId;
+      if (wasNew) {
+        const path = `/invoice/${savedId}`;
+        setActiveInvoicePath(path);
+        navigate(path, { replace: true });
+      }
     },
-    [saveInvoice],
+    [saveInvoice, navigate, id],
   );
 
   const saveKey = id ?? duplicateId ?? 'new';
@@ -54,6 +67,16 @@ export function InvoiceBuilderPage() {
     enabled: invoice?.status === 'Draft',
     saveKey,
   });
+
+  useEffect(() => {
+    setActiveInvoicePath(location.pathname);
+  }, [location.pathname]);
+
+  const commitPendingLines = useCallback(() => {
+    clearPendingLinesStorage();
+    clearPendingLines();
+    refreshPendingCount();
+  }, [clearPendingLines, refreshPendingCount]);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,10 +95,11 @@ export function InvoiceBuilderPage() {
         if (cancelled) return;
 
         if (existing) {
+          let nextInvoice: Invoice;
           if (duplicateId) {
             const num = await peekNextInvoiceNumber();
             invoiceIdRef.current = undefined;
-            setInvoice({
+            nextInvoice = {
               ...existing,
               id: undefined,
               invoiceNumber: num,
@@ -85,11 +109,15 @@ export function InvoiceBuilderPage() {
               auditNotes: undefined,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
-            });
+            };
           } else {
             invoiceIdRef.current = existing.id;
-            setInvoice(existing);
+            nextInvoice = existing;
           }
+          const pending = readPendingLines();
+          if (cancelled) return;
+          if (pending.length > 0) commitPendingLines();
+          setInvoice(mergeLinesIntoInvoice(nextInvoice, pending));
         } else {
           setInvoice(null);
         }
@@ -97,7 +125,7 @@ export function InvoiceBuilderPage() {
         const num = await peekNextInvoiceNumber();
         const now = new Date().toISOString();
         invoiceIdRef.current = undefined;
-        setInvoice({
+        const nextInvoice: Invoice = {
           invoiceNumber: num,
           date: todayIsoDate(),
           clientName: '',
@@ -106,7 +134,11 @@ export function InvoiceBuilderPage() {
           jobNotes: appSettings.defaultInvoiceNotes,
           createdAt: now,
           updatedAt: now,
-        });
+        };
+        const pending = readPendingLines();
+        if (cancelled) return;
+        if (pending.length > 0) commitPendingLines();
+        setInvoice(mergeLinesIntoInvoice(nextInvoice, pending));
       }
 
       setLoading(false);
@@ -116,21 +148,16 @@ export function InvoiceBuilderPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, duplicateId, getInvoice]);
+  }, [id, duplicateId, getInvoice, commitPendingLines]);
 
+  // Merge items added while this invoice page is already open
   useEffect(() => {
-    if (pendingLines.length === 0 || loading || !invoice) return;
-
-    const linesToAdd = [...pendingLines];
-    clearPendingLines();
-
-    setInvoice((prev) => {
-      if (!prev) return prev;
-      const maxOrder = prev.lineItems.reduce((m, l) => Math.max(m, l.sortOrder), -1);
-      const newLines = linesToAdd.map((l, i) => ({ ...l, sortOrder: maxOrder + 1 + i }));
-      return { ...prev, lineItems: [...prev.lineItems, ...newLines] };
-    });
-  }, [pendingLines, loading, invoice, clearPendingLines]);
+    if (loading || !invoice || pendingCount === 0) return;
+    const pending = readPendingLines();
+    if (pending.length === 0) return;
+    commitPendingLines();
+    setInvoice((prev) => (prev ? mergeLinesIntoInvoice(prev, pending) : prev));
+  }, [pendingCount, loading, invoice, commitPendingLines]);
 
   const updateField = <K extends keyof Invoice>(key: K, value: Invoice[K]) => {
     setInvoice((prev) => (prev ? { ...prev, [key]: value } : prev));
@@ -275,83 +302,89 @@ export function InvoiceBuilderPage() {
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="card space-y-4">
           <h2 className="font-semibold">Invoice details</h2>
-          <label className="block">
-            <span className="label">Invoice number</span>
-            <input
-              className="input mt-1"
-              value={invoice.invoiceNumber}
-              disabled={isLocked}
-              onChange={(e) => updateField('invoiceNumber', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Date</span>
-            <input
-              type="date"
-              className="input mt-1"
-              value={invoice.date}
-              disabled={isLocked}
-              onChange={(e) => updateField('date', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Client name *</span>
-            <input
-              className="input mt-1"
-              value={invoice.clientName}
-              disabled={isLocked}
-              onChange={(e) => updateField('clientName', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Client phone</span>
-            <input
-              className="input mt-1"
-              value={invoice.clientPhone ?? ''}
-              disabled={isLocked}
-              onChange={(e) => updateField('clientPhone', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Client email</span>
-            <input
-              type="email"
-              className="input mt-1"
-              value={invoice.clientEmail ?? ''}
-              disabled={isLocked}
-              onChange={(e) => updateField('clientEmail', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Client address</span>
-            <textarea
-              className="input mt-1"
-              rows={2}
-              value={invoice.clientAddress ?? ''}
-              disabled={isLocked}
-              onChange={(e) => updateField('clientAddress', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Job / reference notes</span>
-            <textarea
-              className="input mt-1"
-              rows={2}
-              value={invoice.jobNotes ?? ''}
-              disabled={isLocked}
-              onChange={(e) => updateField('jobNotes', e.target.value)}
-            />
-          </label>
-          <label className="block">
-            <span className="label">Internal notes</span>
-            <textarea
-              className="input mt-1"
-              rows={2}
-              value={invoice.internalNotes ?? ''}
-              disabled={isLocked}
-              onChange={(e) => updateField('internalNotes', e.target.value)}
-            />
-          </label>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <label className="block">
+              <span className="label">Invoice number</span>
+              <input
+                className="input mt-1"
+                value={invoice.invoiceNumber}
+                disabled={isLocked}
+                onChange={(e) => updateField('invoiceNumber', e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Date</span>
+              <input
+                type="date"
+                className="input mt-1"
+                value={invoice.date}
+                disabled={isLocked}
+                onChange={(e) => updateField('date', e.target.value)}
+              />
+            </label>
+            <label className="block sm:col-span-1">
+              <span className="label">Client name *</span>
+              <input
+                className="input mt-1"
+                value={invoice.clientName}
+                disabled={isLocked}
+                onChange={(e) => updateField('clientName', e.target.value)}
+              />
+            </label>
+          </div>
+
+          <CollapsibleSection title="More client & invoice details">
+            <label className="block">
+              <span className="label">Client phone</span>
+              <input
+                className="input mt-1"
+                value={invoice.clientPhone ?? ''}
+                disabled={isLocked}
+                onChange={(e) => updateField('clientPhone', e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Client email</span>
+              <input
+                type="email"
+                className="input mt-1"
+                value={invoice.clientEmail ?? ''}
+                disabled={isLocked}
+                onChange={(e) => updateField('clientEmail', e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Client address</span>
+              <textarea
+                className="input mt-1"
+                rows={2}
+                value={invoice.clientAddress ?? ''}
+                disabled={isLocked}
+                onChange={(e) => updateField('clientAddress', e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Job / reference notes</span>
+              <textarea
+                className="input mt-1"
+                rows={2}
+                value={invoice.jobNotes ?? ''}
+                disabled={isLocked}
+                onChange={(e) => updateField('jobNotes', e.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="label">Internal notes</span>
+              <textarea
+                className="input mt-1"
+                rows={2}
+                value={invoice.internalNotes ?? ''}
+                disabled={isLocked}
+                onChange={(e) => updateField('internalNotes', e.target.value)}
+              />
+            </label>
+          </CollapsibleSection>
         </div>
 
         <div className="card">
@@ -414,7 +447,10 @@ export function InvoiceBuilderPage() {
               <th>Code</th>
               <th>Description</th>
               <th>Qty</th>
-              <th>Unit Price</th>
+              <th>
+                Unit Price
+                <span className="mt-0.5 block text-xs font-normal text-slate-400">(+ GST)</span>
+              </th>
               <th>Line Total</th>
               <th></th>
             </tr>
