@@ -54,7 +54,10 @@ export async function setLastBackupDate(): Promise<void> {
 
 export async function replaceAllProducts(products: Product[]): Promise<number> {
   await db.products.clear();
-  await db.products.bulkAdd(products);
+  const batchSize = 500;
+  for (let i = 0; i < products.length; i += batchSize) {
+    await db.products.bulkAdd(products.slice(i, i + batchSize));
+  }
   return products.length;
 }
 

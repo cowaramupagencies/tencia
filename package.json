@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "vite --port 5173 --strictPort",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "parse-price-list": "node scripts/parse-price-list-pdf.mjs"

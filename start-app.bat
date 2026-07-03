@@ -18,13 +18,22 @@ if not exist "node_modules\" (
   call npm install
 )
 
+REM Stop old copies of the app so the port stays consistent
+echo Stopping any old copy of the app...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5173 ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :5174 ^| findstr LISTENING') do taskkill /F /PID %%a >nul 2>&1
+
 echo.
 echo Starting Temporary Invoicing App...
-echo Open http://localhost:5173 in your browser.
-echo Do NOT open index.html directly - use the link above.
 echo.
+echo IMPORTANT: Wait for the message below, then open:
+echo   http://localhost:5173
+echo.
+echo Do NOT open index.html directly.
+echo Leave this window open while using the app.
 echo Press Ctrl+C to stop the server.
 echo.
 
+timeout /t 2 /nobreak >nul
 start http://localhost:5173
-call npm run dev
+call npm run dev -- --port 5173 --strictPort

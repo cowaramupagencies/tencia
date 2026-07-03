@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Large PDF copies cause Vite file watcher crashes on OneDrive
+public/*.pdf
+scripts/pdf-extract-full.txt

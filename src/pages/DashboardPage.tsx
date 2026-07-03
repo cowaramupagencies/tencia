@@ -1,12 +1,13 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, StatCard } from '../components/ui';
-import { getDashboardStats } from '../db/database';
+import { db, getDashboardStats } from '../db/database';
 import { formatCurrency } from '../lib/calculations';
 
 export function DashboardPage() {
+  const productCount = useLiveQuery(() => db.products.count(), []) ?? 0;
   const [stats, setStats] = useState({
-    productCount: 0,
     draftCount: 0,
     finalisedCount: 0,
     unreconciledCount: 0,
@@ -14,8 +15,15 @@ export function DashboardPage() {
   });
 
   useEffect(() => {
-    void getDashboardStats().then(setStats);
-  }, []);
+    void getDashboardStats().then((s) =>
+      setStats({
+        draftCount: s.draftCount,
+        finalisedCount: s.finalisedCount,
+        unreconciledCount: s.unreconciledCount,
+        totalValue: s.totalValue,
+      }),
+    );
+  }, [productCount]);
 
   return (
     <div>
@@ -35,7 +43,7 @@ export function DashboardPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard label="Products imported" value={stats.productCount} />
+        <StatCard label="Products imported" value={productCount} />
         <StatCard label="Draft invoices" value={stats.draftCount} />
         <StatCard label="Finalised invoices" value={stats.finalisedCount} />
         <StatCard label="Unreconciled invoices" value={stats.unreconciledCount} />
