@@ -119,15 +119,18 @@ export function InvoiceBuilderPage() {
   }, [id, duplicateId, getInvoice]);
 
   useEffect(() => {
-    if (pendingLines.length === 0) return;
+    if (pendingLines.length === 0 || loading || !invoice) return;
+
+    const linesToAdd = [...pendingLines];
+    clearPendingLines();
+
     setInvoice((prev) => {
       if (!prev) return prev;
       const maxOrder = prev.lineItems.reduce((m, l) => Math.max(m, l.sortOrder), -1);
-      const newLines = pendingLines.map((l, i) => ({ ...l, sortOrder: maxOrder + 1 + i }));
+      const newLines = linesToAdd.map((l, i) => ({ ...l, sortOrder: maxOrder + 1 + i }));
       return { ...prev, lineItems: [...prev.lineItems, ...newLines] };
     });
-    clearPendingLines();
-  }, [pendingLines, clearPendingLines]);
+  }, [pendingLines, loading, invoice, clearPendingLines]);
 
   const updateField = <K extends keyof Invoice>(key: K, value: Invoice[K]) => {
     setInvoice((prev) => (prev ? { ...prev, [key]: value } : prev));

@@ -330,6 +330,7 @@ export function createEmptyInvoice(settings: AppSettings): Partial<Invoice> {
 export function createLineFromProduct(
   product: Product,
   sortOrder: number,
+  quantity = 1,
 ): InvoiceLineItem {
   return {
     id: crypto.randomUUID(),
@@ -337,7 +338,7 @@ export function createLineFromProduct(
     itemCode: product.itemCode,
     itemName: product.itemName,
     description: product.description || product.itemName,
-    quantity: 1,
+    quantity: quantity > 0 ? quantity : 1,
     unitPrice: product.unitPrice,
     gstStatus: product.gstStatus,
     isManual: false,
